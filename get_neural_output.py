@@ -2,7 +2,7 @@ from pygame import display, init, draw, image, event
 from os import system, remove, listdir
 from sys import exit
 from pygame.locals import QUIT
-from Maria import network
+from Nausicaa import network
 from get_audio_output import *
 from statistics import mean
 
