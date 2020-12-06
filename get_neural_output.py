@@ -1,48 +1,107 @@
-from Nausicaa import network
-from display import *
-import pygame
-from pygame.locals import *
-import os
+from pygame import display, init, draw, image, event
+from os import system, remove, listdir
+from sys import exit
+from pygame.locals import QUIT
+from Maria import network
 from get_audio_output import *
 from statistics import mean
 
-class config():
-	lines = 900
-	LenghtLine = 450
-	FrameAct = 0
-	couches = [100, 450]
-	Adata = []
+class config:
+	pix_size = 2
+	lines, line_size = int(1800/pix_size), int(900/pix_size)
 
-	IScolor = True
-	color = (240, 240, 240)
-	colorS = 60
+	neural_smooth = 2.5
+	layers = [int(line_size/neural_smooth), line_size]
 
-	video_time = 10
-	framerate_ = 25
+	background_color = (20, 20, 20)
+	dark = 10
 
-	audio = True
+class video:
+	duration = 10 # sec
+	framerate = 25
 
-	min_frq = 300
-	max_frq = 1300
+	screen_coef = int(config.lines/(duration*framerate))
 
-	audio_frame_time = int(video_time/(framerate_*video_time)*100000)/100
-	print(audio_frame_time)
-	scr_per_frame = int(lines/(video_time*framerate_))
+	def save_surface():
+		filename = "./temp_output/"+str(int(window.line/video.screen_coef))+".png"
+		image.save(window.screen, filename)
 
-	audio_frame = []
+		audio.gen()
 
-def init():
-	screen.fill((20, 20, 20))
-	network.config.tconnexion = 0.1
-	network.init(1, config.couches, config.LenghtLine)
-	part = network.act([1])
-	network.learn(300, 1)
+class audio:
+	activate = True
 
-	data.sample_rate
+	frq = (300, 1300)
+	frame_time = int(video.duration/(video.framerate*video.duration)*100000)/100
+
+	frames = []
+
+	def gen():
+		try:
+			append_sinewave(freq=mean(audio.frames), duration_milliseconds=audio.frame_time, volume=1.0)
+		except Exception as e:
+			print(e)
+			append_silence(audio.frame_time)
 
 def positif(nbr):
 	if(nbr < 0): return nbr*-1
 	else: return nbr
+
+def format_(nbr, min_=0, max_=0, positif=False, int_=False):
+	if(positif and nbr < 0): nbr = nbr*-1
+	if(nbr < min_+20): nbr = min_
+	elif(nbr > max_-50): nbr = max_
+	return nbr
+
+class window:
+	screen = None
+	line = 0
+
+	def event():
+		for e in event.get():
+			if(e.type == QUIT):
+				print("\nEnd of process\n")
+				exit()
+
+	def new_line(data):
+		window.event()
+		colors = []
+		if(audio.activate): audio.frames = []
+		for i in range(config.line_size):
+			color = int(format_((data[i]*config.dark)*255, 0, 200, True))
+			color = positif(color-225)
+			c = color
+
+
+			div = 1
+			for a in range(13):
+				if(i+(a-6) >=0 and i+(a-6) < config.line_size): color += data[i+(a-6)]
+			for b in range(5):
+				if(i+(b-2) >=0 and i+(b-2) < config.line_size and network_.old_output): color += network_.old_output[i+(b-2)]
+
+			color = (color+c/2)/6.2
+			colors.append(color)
+
+			if(color > 220): color = 255
+			elif(color < 100 and color >30): color += -30
+
+			color = format_(color, config.background_color[0], 255)
+
+			draw.rect(window.screen, (color, color, color), (window.line*config.pix_size, i*config.pix_size, config.pix_size, config.pix_size))
+
+			if(audio.activate): audio.frames.append(audio.frq[0] + color/255*(audio.frq[1]-audio.frq[0]))
+
+		window.line+=1
+		network_.old_output = colors
+		draw.line(window.screen, (230, 10, 10), (window.line*config.pix_size, 0), (window.line*config.pix_size, config.line_size*config.pix_size), config.pix_size)
+		display.update()
+
+class network_:
+	output = []
+	old_output = False
+	def learn():
+		network.learn(10)
+		network_.output = network.act([1])
 
 def file_exist(file):
 	try:
@@ -52,73 +111,39 @@ def file_exist(file):
 		return False
 
 def EraseFile(repertoire):
-	files=os.listdir(repertoire)
-	for i in range(0,len(files)):
-		os.remove(repertoire+'/'+files[i])
+	files = listdir(repertoire)
+	for i in range(0,len(files)): remove(repertoire+'/'+files[i])
 
-def save_surf():
-	filename = "./save/"+str(int(config.FrameAct/config.scr_per_frame))+".png"
-	pygame.image.save(screen, filename)
-
-def convert_surf():
+def create_output():
 	nbr_output = 0
   
-	while file_exist("output"+str(nbr_output)+".mp4"):
-		nbr_output += 1
+	while file_exist("./outputs/output"+str(nbr_output)+".mp4"): nbr_output += 1
 
-	save_wav("output_audio"+str(nbr_output)+".wav")
-	os.system("ffmpeg -framerate "+str(config.framerate_)+" -i ./save/%01d.png \
-	-i "+"output_audio"+str(nbr_output)+".wav"+" output"+str(nbr_output)+".mp4")
-	os.remove("output_audio"+str(nbr_output)+".wav")
-	
-	EraseFile("./save/")
-def Event():
-	for event in pygame.event.get():
-		if(event.type==QUIT):
-			print("\nEnd of process\n")
-			sys.exit()
+	save_wav("./outputs/output_audio"+str(nbr_output)+".wav")
+	system("ffmpeg -framerate "+str(video.framerate)+" -i ./temp_output/%01d.png \
+	-i "+"./outputs/output_audio"+str(nbr_output)+".wav"+" ./outputs/output"+str(nbr_output)+".mp4")
+	remove("./outputs/output_audio"+str(nbr_output)+".wav")
+	EraseFile("./temp_output/")
+	print("##### READY TO QUIT #####")
 
-pygame.init()
-screen = pygame.display.set_mode((config.lines*2, config.LenghtLine*2-10))
+def init_all():
+	init()
+	window.screen = display.set_mode((int(config.lines*config.pix_size), int(config.line_size*config.pix_size)))
+	window.screen.fill(config.background_color)
 
-def Frame(data):
-	config.audio_frame = []
-	pygame.draw.line(screen, (250, 20, 20), (config.FrameAct*2+2, 0), (config.FrameAct*2+2, config.LenghtLine*2), 2)
-	for i in range(config.couches[len(config.couches)-1]):
-		try: dd = positif((data[i-4]+data[i-3]+data[i-2]+data[i-1]+data[i]+data[i+1]+data[i+2]+data[i+3]+data[i+4] + config.Adata[i-2]+config.Adata[i-1]+config.Adata[i]+config.Adata[i+1]+config.Adata[i+2])/14*255)
-		except: dd = 255
-		if(dd <config.colorS and config.IScolor): color = config.color
-		elif(dd > 255): color = (20, 20, 20)
-		else:
-			dd = positif(dd-255)
-			color = (dd, dd, dd)
-			if(dd < 20): color = (20, 20, 20)
-		if(config.audio):
-			if(color == config.color): config.audio_frame.append(i/config.couches[len(config.couches)-1]*(config.max_frq-config.min_frq)+config.min_frq)
-		pygame.draw.rect(screen, color, (config.FrameAct*2, i*2, 2, 2))
-	
-	if(config.FrameAct%config.scr_per_frame == 0): 
-		save_surf()
-		if(config.audio and config.FrameAct%(config.scr_per_frame) == 0):
-			try:
-				append_sinewave(freq=mean(config.audio_frame), duration_milliseconds=config.audio_frame_time, volume=1.0)
-			except Exception as e:
-				print(e)
-				append_silence(config.audio_frame_time)
-	
-	config.FrameAct += 1
-	config.Adata = data
+	network.config.tconnexion = 0.1
+	network.init(1, config.layers, config.line_size)
 
-init()
+init_all()
 
 for i in range(config.lines):
-	Event()
-	network.learn(8, 1)
-	Frame(network.act([1]))
-	pygame.display.update()
+	network_.learn()
+	window.new_line(network_.output)
 
-convert_surf()
-print("######## END")
+	if(i%video.screen_coef == 0):
+		video.save_surface()
+
+create_output()
 
 while 1:
-	Event()
+	window.event()
